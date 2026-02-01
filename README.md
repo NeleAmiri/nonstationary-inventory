@@ -48,7 +48,7 @@ Each execution of the algorithm through `main.py` produces CSV files with the pe
 
 ---
 
-## 5. Variable dictionaries
+## 4. Variable dictionaries
 
 Below we describe the key variables used across scripts. Where practical, the variable names from the manuscript were used.
 

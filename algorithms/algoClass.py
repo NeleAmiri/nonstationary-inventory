@@ -30,14 +30,6 @@ class BaseAlgo:
         """Resets member variables of algorithm class instance."""
         raise NotImplementedError("Method clear() has to be implemented in the class inherited from BaseAlgo.")
 
-    @abstractmethod
-    def selectAction(self, environment: Environment) -> int:
-        """
-        :return: selected action
-        """
-        raise NotImplementedError("Method selectAction() has to be implemented in the class inherited from BaseAlgo.")
-
-    @abstractmethod
     def updateAlgo(self, arm: int, cost: float, sales: float | int, environment: Environment):
         """
         :param arm: the action taken (index of bslevels)
@@ -47,5 +39,13 @@ class BaseAlgo:
         """
         raise NotImplementedError("Method updateObservations() has to be implemented in class inherited from BaseAlgo.")
 
+    @abstractmethod
+    def selectAction(self) -> int:
+        """
+        :return: selected action
+        """
+        raise NotImplementedError("Method selectAction() has to be implemented in the class inherited from BaseAlgo.")
+
+    @abstractmethod
     def __repr__(self):
         return str(self.__class__.__name__)

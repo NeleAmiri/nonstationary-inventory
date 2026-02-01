@@ -17,43 +17,42 @@ def runAlgorithm(algorithm,
     """
     :param algorithm: algorithm
     :param environment: Environment
-    :param T: length of time horizon (number of time steps)
+    :param T: length of time horizon (total number of time steps)
     :param changes: list of change points
-    :return: regret, true_cost, num_neg_orders, best_action_history
+    :return: dynamicRegret, staticRegret, trueCost, expectedCost, sum_min_exp_cost
     """
-    dynamic_regret = []
+    dynamicRegret = []
     best_arm_hindsight, exp_cost_best_arm_hindsight = get_best_fixed_arm_hindsight(environment, T, changes)
-    static_regret = []
-    true_cost = []
-    expected_cost = []
-    sum_min_exp_cost = 0.0
+    staticRegret = []
+    trueCost = []
+    expectedCost = []
+    sum_minExpectedCost = 0.0
     min_exp_cost = environment.exp_costs[environment.best_arm]
 
     print(f"\nUsing {algorithm.__repr__()} with S={environment.S}.")
     while algorithm.t <= T:
         if algorithm.t in changes:  # change in demand distribution
             environment.change()
-            plt_ex_cost = environment.exp_costs
             min_exp_cost = environment.exp_costs[environment.best_arm]
             if algorithm.verbose:
                 print(f"Change occurred in t={algorithm.t}. New best arm: {environment.best_arm} with level {environment.bslevels[environment.best_arm]}")
 
-        arm = algorithm.selectAction(environment)
+        arm = algorithm.selectAction()
         pseudo_cost, cost, sales = environment.get_cost(arm)  # arm is index of environment.bslevels, and bslevel if not algorithm.discrete_A # under backlogging, sales is demand
-        true_cost.append(cost)
-        expected_cost.append(environment.exp_costs[arm])
-        dynamic_regret.append(environment.exp_costs[arm] - min_exp_cost)
-        static_regret.append(environment.exp_costs[arm] - exp_cost_best_arm_hindsight)
-        sum_min_exp_cost += min_exp_cost
+        trueCost.append(cost)
+        expectedCost.append(environment.exp_costs[arm])
+        dynamicRegret.append(environment.exp_costs[arm] - min_exp_cost)
+        staticRegret.append(environment.exp_costs[arm] - exp_cost_best_arm_hindsight)
+        sum_minExpectedCost += min_exp_cost
 
-        algorithm.updateAlgo(arm, pseudo_cost, sales, environment)  # under backlogging, sales is the demand here
+        algorithm.updateAlgo(arm, pseudo_cost, sales, environment)  # under backlogging, sales is the true observed demand here
         
-    return dynamic_regret, static_regret, true_cost, expected_cost, sum_min_exp_cost
+    return dynamicRegret, staticRegret, trueCost, expectedCost, sum_minExpectedCost
 
 _global_algorithm = None
 
 def _init_worker(algorithm):
-    """Each worker gets its own independent algorithm instance."""
+    # Each worker gets its own independent algorithm instance.
     global _global_algorithm
     _global_algorithm = copy.deepcopy(algorithm)
 
@@ -88,50 +87,49 @@ def _run_single(repetition, config, T):
         changePoints = []
 
     start_time = datetime.datetime.now()
-    regret, static_regret, true_cost, expected_cost, cum_min_exp_cost = runAlgorithm(algorithm=algorithm, environment=environment, 
-                                                                                     T=T, changes=changePoints)
+    dynamicRegret, staticRegret, trueCost, expectedCost, cum_minExpectedCost = runAlgorithm(algorithm=algorithm, environment=environment, 
+                                                                                            T=T, changes=changePoints)
     duration = (datetime.datetime.now() - start_time).total_seconds()
-    print(f"Completed repetition {repetition + 1} in {duration:.2f}s with average regret {np.mean(regret):.4f}.")
-    return (repetition, regret, static_regret, true_cost, expected_cost, cum_min_exp_cost, duration)
+    print(f"Completed repetition {repetition + 1} in {duration:.2f}s with average regret {np.mean(dynamicRegret):.4f}.")
+    return (repetition, dynamicRegret, staticRegret, trueCost, expectedCost, cum_minExpectedCost, duration)
 
 
 def main(algorithm,
          environment: Environment,
-         T: int,
+         T: int = 10000,
          num_repetitions: int = 1,
          config: dict = {}):
     """
     :param algorithm: algorithm
-    :param algo_name: name of the algorithm (str)
     :param environment: environment instance (Environment)
     :param T: size of time horizon (int)
     :param num_repetitions: number of repetitions to run (int)
     :param config: config file containing input data
-    :return: performance_metrics
+    :return: performance_metrics (dict)
     """
     assert algorithm is not None, "No algorithm specified."
+    assert environment is not None, "No environment specified."
     performance_metrics = {}
     avg_runtime = 0.0
     if num_repetitions == 1:
-        # single-run (sequential) behaviour unchanged
         # ordered list of change points
         points = range(T)
         changePoints = sorted(random.sample(points, len(environment.d_dists)-1)) if len(environment.d_dists) > 1 else []
         changePoints = [points[index] for index in changePoints] if changePoints else []
 
         start_time = datetime.datetime.now()
-        regret, static_regret, true_cost, expected_cost, cum_min_exp_cost = runAlgorithm(algorithm=algorithm, environment=environment, 
-                                                                                         T=T, changes=changePoints)
+        dynamicRegret, staticRegret, trueCost, expectedCost, cum_minExpectedCost = runAlgorithm(algorithm=algorithm, environment=environment, 
+                                                                                                T=T, changes=changePoints)
         timeDelta = datetime.datetime.now() - start_time
         avg_runtime += timeDelta.total_seconds()
-        print(f"Run 1/{num_repetitions} of {algorithm.__repr__()} completed in {timeDelta.total_seconds():.4f}s with average regret {np.mean(regret)}.")
+        print(f"Run 1/{num_repetitions} of {algorithm.__repr__()} completed in {timeDelta.total_seconds():.4f}s with average regret {np.mean(dynamicRegret)}.")
 
         performance_metrics[0] = {
-            'R': np.cumsum(regret, axis=0, dtype=float),
-            'SR': np.cumsum(static_regret, axis=0, dtype=float),
-            'C': np.cumsum(true_cost, axis=0, dtype=float),
-            'EC': np.cumsum(expected_cost, axis=0, dtype=float),
-            'RR': np.sum(regret)/cum_min_exp_cost * 100
+            'R': np.cumsum(dynamicRegret, axis=0, dtype=float),
+            'SR': np.cumsum(staticRegret, axis=0, dtype=float),
+            'C': np.cumsum(trueCost, axis=0, dtype=float),
+            'EC': np.cumsum(expectedCost, axis=0, dtype=float),
+            'RR': np.sum(dynamicRegret)/cum_minExpectedCost * 100
         }
     else:
         # parallel execution of repetitions
@@ -145,13 +143,13 @@ def main(algorithm,
             results = pool.starmap(_run_single, tasks)
 
         # aggregate results
-        for (repetition, regret, static_regret, true_cost, expected_cost, cum_min_exp_cost, duration) in results:
+        for (repetition, regret, staticRegret, trueCost, expectedCost, cum_min_exp_cost, duration) in results:
             avg_runtime += duration
             performance_metrics[repetition] = {
                 'R': np.cumsum(regret, axis=0, dtype=float),
-                'SR': np.cumsum(static_regret, axis=0, dtype=float),
-                'C': np.cumsum(true_cost, axis=0, dtype=float),
-                'EC': np.cumsum(expected_cost, axis=0, dtype=float),
+                'SR': np.cumsum(staticRegret, axis=0, dtype=float),
+                'C': np.cumsum(trueCost, axis=0, dtype=float),
+                'EC': np.cumsum(expectedCost, axis=0, dtype=float),
                 'RR': np.sum(regret)/cum_min_exp_cost * 100
             }
             print(f"Run {repetition + 1}/{num_repetitions} of {algorithm.__repr__()} completed in {duration:.2f}s with average regret {np.mean(regret):.4f}.")
@@ -181,21 +179,20 @@ def main(algorithm,
             for rep in performance_metrics:
                 writer.writerow(performance_metrics[rep]['R'])
 
-    print(f"{algorithm.__repr__()}: average runtime per run: {avg_runtime / max(1, num_repetitions):.4f} ")
+    print(f"{algorithm.__repr__()}: average runtime per run {avg_runtime / max(1, num_repetitions):.4f} and average regret {np.mean([performance_metrics[rep]['R'][-1] for rep in performance_metrics]):.4f}.")
     return performance_metrics
 
 
 def objective(trial: optuna.Trial, env) -> float:
-    """ objective function for hyperparameter optimization """
-    if "NSIC" in config['algorithm']:
-        const1 = trial.suggest_float("const1", 1e-8, 1e-2, log=True)
-        const2 = trial.suggest_float("const2", 1e-8, 1e-2, log=True)
-        print(f"Trial {trial.number} - Params: const1={const1}, const2={const2}")
-        algorithm = NSIC(K=env.K, T=T_horizon, L=env.L, U=U,
-                                      model=env.model, lipschitzConst=lipschitzFactor, deltaProb=config['delta_prob'],
-                                      verbose=verbose, constChangeCheck=const1, constEvictionCheck=const2)
-    else:
-        raise NameError(f"Undefined algorithm name: '{config['algorithm']}'")
+    """ 
+    Objective function for hyperparameter optimization 
+    """
+    constChange = trial.suggest_float("constChange", 1e-8, 1e-2, log=True)
+    constEviction = trial.suggest_float("constEviction", 1e-8, 1e-2, log=True)
+    print(f"Trial {trial.number} - Params: constChange={constChange}, constEviction={constEviction}")
+    algorithm = NSIC(K=env.K, T=T_horizon, L=env.L, U=U,
+                    model=env.model, lipschitzConst=lipschitzFactor, deltaProb=config['delta_prob'],
+                    verbose=verbose, constChangeCheck=constChange, constEvictionCheck=constEviction)
 
     metric = main(algorithm=algorithm, environment=env, T=T_horizon, 
                   num_repetitions=config['opt_num_repetitions'], config=config)
@@ -204,8 +201,9 @@ def objective(trial: optuna.Trial, env) -> float:
     
 
 if __name__ == "__main__":
-    """ read in data of problem instance """
-
+    """
+    Read in data from configSimulation.yaml and either perform hyperparameter optimization (tuning costants) or run simulation.
+    """
     with open('input/configSimulation.yaml', 'r') as config_file:
         config = yaml.safe_load(config_file)
 
@@ -214,21 +212,20 @@ if __name__ == "__main__":
     metrics = []
     opt_params = config['opt_params']
 
-    if not opt_params:
-        environment, U, lipschitzFactor = get_env_from_config(config, config['seed'])
-
-        algo = NSIC(K=environment.K, T=T_horizon, L=environment.L, U=U, model=environment.model,
-                        lipschitzConst=lipschitzFactor, deltaProb=config['delta_prob'], verbose=verbose,
-                        constChangeCheck=config['const_change_NSIC'], constEvictionCheck=config['const_eviction_NSIC'])
-        metrics.append(main(algorithm=algo, environment=environment, T=T_horizon, 
-                            num_repetitions=config['num_repetitions'], config=config))
-    else:
+    if opt_params:
         environment, U, lipschitzFactor = get_env_from_config(config, config['seed'])
         study = optuna.create_study(direction="minimize")
         study.optimize(lambda trial: objective(trial, environment), n_trials=config['opt_num_trials'])
 
-        df = study.trials_dataframe(attrs=("number", "value", "params"))
-        df_sorted = df.sort_values("value", ascending=True)
+        trials_df = study.trials_dataframe(attrs=("number", "value", "params"))
+        df_sorted = trials_df.sort_values("value", ascending=True)
         print(df_sorted)
         print("Best params:", study.best_params)
-        print("Best score:", study.best_value)
+        print("Best score:", study.best_value)        
+    else:
+        environment, U, lipschitzFactor = get_env_from_config(config, config['seed'])
+        algo = NSIC(K=environment.K, T=T_horizon, L=environment.L, U=U, model=environment.model,
+                        lipschitzConst=lipschitzFactor, deltaProb=config['delta_prob'], verbose=verbose,
+                        constChangeCheck=config['constChange'], constEvictionCheck=config['constEviction'])
+        metrics.append(main(algorithm=algo, environment=environment, T=T_horizon, 
+                            num_repetitions=config['num_repetitions'], config=config))

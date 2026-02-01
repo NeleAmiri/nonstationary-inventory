@@ -5,16 +5,19 @@ def get_env_from_config(config, seed) -> Tuple[Environment, float, float]:
     # validate inputs
     T = int(config['T'])
     L = int(config['L'])
+    S = config['S']
     h = config['h']
     b = config['b']
-    if T <= 0:
-        raise ValueError(f"The value of `T` must be non-positive, got {T}")
-    if L < 0:
-        raise ValueError(f"The value of `lead_time` must be non-negative, got {L}")
+    if T <= 0 or not isinstance(T, int):
+        raise ValueError(f"The parameter time horizon `T` must be a positive integer, got {T}.")
+    if L < 0 or not isinstance(L, int):
+        raise ValueError(f"The parameter lead time `L` must be a non-negative integer, got {L}.")
+    if S <= 0 or S > T or not isinstance(S, int):
+        raise ValueError(f"The non-stationarity measure `S` must be a positive integer at most {T}, got {S}.")
     if h < 0:
-        raise ValueError(f"The value of `h` must be non-negative, got {h}")
+        raise ValueError(f"The value of `h` must be non-negative, got {h}.")
     if b < 0:
-        raise ValueError(f"The value of `b` must be non-negative, got {b}")
+        raise ValueError(f"The value of `b` must be non-negative, got {b}.")
     
     model = config['model'].lower()
     allowed_models = {"lost_sales", "backlog"}
@@ -22,11 +25,10 @@ def get_env_from_config(config, seed) -> Tuple[Environment, float, float]:
         raise ValueError(f"`model` must be one of {allowed_models}, got '{config['model']}'")
 
     # compute parameters
-    critical_ratio = b / (b + h)
+    criticalRatio = b / (b + h)
     lipschitzFactor = max(h, b)
 
     # read in demand distributions
-    S = config['S']
     d_distribution = config['d_distribution']
     d_dists = []
     if d_distribution == "Normal":
@@ -46,11 +48,11 @@ def get_env_from_config(config, seed) -> Tuple[Environment, float, float]:
     else:
         raise ValueError(f"Unknown distribution: {d_distribution}")
     
-    max_opt_bs_level = max([d_dist.get_opt_bs_level(critical_ratio, L) for d_dist in d_dists])
+    max_opt_bs_level = max([d_dist.get_opt_bs_level(criticalRatio, L) for d_dist in d_dists])
     U = 1.2 * float(max_opt_bs_level)  # upper bound on opt. base stock levels
     gamma = pow(T, config['gamma_exponent'])
     K = ceil(U / gamma) + 1
-    bslevels = np.linspace(0.0, U, num=K)  # bslevel[0] = 0.0, ... bslevel[K-1] = U
+    bslevels = np.linspace(0.0, U, num=K)
     environment = Environment(model=model, K=K, gamma=gamma, bslevels=bslevels, h=h, b=b, d_dists=d_dists, L=L)
 
     return environment, U, lipschitzFactor
@@ -61,8 +63,8 @@ def get_best_fixed_arm_hindsight(
     T: int,
     changes: Optional[List[int]]) -> Tuple[int, float]:
     """
-    Compute the best fixed arm in hindsight given known change points and
-    expected cost vectors for each stationary segment.
+    Compute the best fixed arm in hindsight and its expected cost given change points
+    and expected cost vectors for each stationary segment.
     """
     changes = changes or []
 
@@ -76,7 +78,6 @@ def get_best_fixed_arm_hindsight(
 
     # Aggregate total expected cost per arm
     total_cost_per_arm = np.zeros(environment.K, dtype=float)
-
     for seg_len, exp_costs in zip(segment_lengths, environment.exp_costs_list):
         total_cost_per_arm += seg_len * np.asarray(exp_costs, dtype=float)
 

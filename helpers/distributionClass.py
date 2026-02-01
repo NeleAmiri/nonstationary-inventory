@@ -19,7 +19,7 @@ class BaseDist:
         raise NotImplementedError("Method `get_cum_demand` has to be implemented in class inherited from BaseDist.")
 
     @abstractmethod
-    def get_opt_bs_level(self, critical_ratio: float, lead_time: int):
+    def get_opt_bs_level(self, criticalRatio: float, L: int):
         raise NotImplementedError("Method `get_opt_bs_level` has to be implemented in class inherited from BaseDist.")
 
     @abstractmethod
@@ -40,22 +40,22 @@ class Normal(BaseDist):
         self.rng = np.random.default_rng(seed=seed)
         self.max_value = norm.ppf(q=0.99, loc=self.mean, scale=self.std_dev)
         np.random.seed(seed=seed)
-        assert mean >= 0, f"Parameter `mean` must be non-negative but is mean={mean}."
-        assert std_dev >= 0, f"Standard deviation must be non-negative but is std_dev={std_dev}."
+        assert mean >= 0, f"Parameter `mean` of the Normal distribution must be non-negative but is {mean}."
+        assert std_dev >= 0, f"Standard deviation of the Normal distribution must be non-negative but is {std_dev}."
 
     def __repr__(self) -> str:
         return "Normal"
 
     def sample(self) -> float:
-        return float(max(0.0, min(self.rng.normal(loc=self.mean, scale=self.std_dev), self.max_value)))  # TODO: why is max_value needed?
+        return float(max(0.0, min(self.rng.normal(loc=self.mean, scale=self.std_dev), self.max_value)))
 
     def get_cum_demand(self, invLevel: int) -> float:
         return float(norm.cdf(x=invLevel, loc=self.mean, scale=self.std_dev))
 
-    def get_opt_bs_level(self, critical_ratio: float, lead_time: int) -> float:
-        mu_L = self.mean * (lead_time + 1)
-        sigma_L = self.std_dev * sqrt(lead_time + 1)
-        z = float(norm.ppf(critical_ratio))
+    def get_opt_bs_level(self, criticalRatio: float, L: int) -> float:
+        mu_L = self.mean * (L + 1)
+        sigma_L = self.std_dev * sqrt(L + 1)
+        z = float(norm.ppf(criticalRatio))
         return mu_L + z * sigma_L
     
     def get_exp_cost(self, environment) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -81,8 +81,8 @@ class Uniform(BaseDist):
         self.max_value = self.high
         np.random.seed(seed=seed)
         self.rng = np.random.default_rng(seed)
-        assert low >= 0, f"Parameter `low` must be non-negative but is mean={low}."
-        assert scale >= 0, f"Parameter `scale` must be non-negative but is scale={scale}."
+        assert low >= 0, f"Parameter `low` of the Uniform distribution must be non-negative but is {low}."
+        assert scale >= 0, f"Parameter `scale` of the Uniform distribution must be non-negative but is {scale}."
 
     def __repr__(self) -> str:
         return "Uniform"
@@ -93,11 +93,11 @@ class Uniform(BaseDist):
     def get_cum_demand(self, invLevel: int) -> float:
         return float(uniform.cdf(x=invLevel, loc=self.low, scale=self.scale))
 
-    def get_opt_bs_level(self, critical_ratio: float, lead_time: int):
-        mu_L = (lead_time + 1) * self.mean
-        sigma_L = sqrt((lead_time + 1) * (self.std_dev ** 2))
+    def get_opt_bs_level(self, criticalRatio: float, L: int):
+        mu_L = (L + 1) * self.mean
+        sigma_L = sqrt((L + 1) * (self.std_dev ** 2))
 
-        z = norm.ppf(critical_ratio)
+        z = norm.ppf(criticalRatio)
         return mu_L + z * sigma_L
 
     def get_exp_cost(self, environment: Environment) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -117,7 +117,7 @@ class Poisson(BaseDist):
         self.std_dev = sqrt(mean)
         self.max_value = ceil(poisson.ppf(q=0.99, mu=self.mean))
         np.random.seed(seed=seed)
-        assert mean >= 0, f"Parameter `mean` must be non-negative but is mean={mean}."
+        assert mean >= 0, f"Parameter `mean` of the Poisson distribution must be non-negative but is {mean}."
 
     def __repr__(self) -> str:
         return "Poisson"
@@ -128,8 +128,8 @@ class Poisson(BaseDist):
     def get_cum_demand(self, invLevel: int) -> int:
         return int(poisson.cdf(k=invLevel, mu=self.mean))
 
-    def get_opt_bs_level(self, critical_ratio: float, lead_time: int):
-        opt_level = poisson.ppf(critical_ratio, mu=self.mean * (lead_time + 1))
+    def get_opt_bs_level(self, criticalRatio: float, L: int):
+        opt_level = poisson.ppf(criticalRatio, mu=self.mean * (L + 1))
         return opt_level
 
     def get_exp_cost(self, environment: Environment) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -145,7 +145,7 @@ class Exponential(BaseDist):
     Exponential distribution with parameter `mean`
     """
     def __init__(self, rate: float, seed: int = 2):
-        assert rate > 0, f"Parameter `rate` must be positive but is rate={rate}."
+        assert rate > 0, f"Parameter `rate` of the Exponential distribution must be positive but is {rate}."
         self.rate = rate
         self.mean = 1/rate
         self.std_dev = 1/rate
@@ -161,8 +161,8 @@ class Exponential(BaseDist):
     def get_cum_demand(self, invLevel: float) -> float:
         return float(expon.cdf(x=invLevel, scale=self.mean))
 
-    def get_opt_bs_level(self, critical_ratio: float, lead_time: int):
-        opt_level = gamma.ppf(critical_ratio, a=(lead_time+1), scale=self.mean)
+    def get_opt_bs_level(self, criticalRatio: float, L: int):
+        opt_level = gamma.ppf(criticalRatio, a=(L+1), scale=self.mean)
         return opt_level
 
     def get_exp_cost(self, environment: Environment) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -181,7 +181,7 @@ def get_cost_all_arms(
     b: float,
     h: float,) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     """
-    Monte-Carlo cost simulation for multiple base-stock levels.
+    Monte-Carlo cost simulation for long-run costs of discrete set of base-stock policies.
     """
     T = len(demands)
     K = len(bslevels)

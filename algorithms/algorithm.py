@@ -98,7 +98,7 @@ class NSIC(BaseAlgo):
         if self.L and self.model == "lost_sales":
             self.invStates[:] = 0.0
 
-    def n_s_t(self, arm: int, s: int, t: int) -> int:
+    def n_s_t(self, arm: int, s: int, t: int) -> np.intp:
         assert s <= t, f"Variable n_s_t only exists for s <= t, but s={s} and t={t} for action a={arm}"
         values = self.pseudoCostHistory[arm, s:t+1]
         return np.count_nonzero(~np.isnan(values))
@@ -296,7 +296,7 @@ class NSIC(BaseAlgo):
         m = highest_arm_observed + 1
 
         cf_bslevels = np.asarray(environment.bslevels[:m], dtype=float)
-        inv = self.invStates[:m] # shape (m, L+1)
+        inv = self.invStates[:m]
 
         if self.L:
             cf_order = np.maximum(cf_bslevels - np.sum(inv, axis=1), 0.0)
@@ -326,7 +326,7 @@ class NSIC(BaseAlgo):
                 self.start_new_epoch()
 
 
-    def selectAction(self, environment) -> int:
+    def selectAction(self) -> int:
         if self.model == "lost_sales" and not self.L and self.samplingObligations > 0:
             a_t = self.K-1
             self.samplingObligations -= 1

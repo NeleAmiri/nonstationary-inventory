@@ -1,23 +1,23 @@
 # model
-T: 10000  # time horizon
-h: 1.0  # holding cost parameter
-b: 49.0  # lost-sales/backlog penalty cost parameter
-L: 2  # lead time
+T: 10000                # time horizon
+L: 0                    # lead time
+h: 1.0                  # holding cost parameter
+b: 49.0                 # lost-sales/backlog penalty cost parameter
 d_distribution: Normal  # demand distribution (Normal, Uniform, Poisson, Exponential)
-S: 1  # number of stationary segments in over T
-gamma_exponent: -0.1  # discretzation gamma = T^{gamma_exponent}
-model: backlog  # lost_sales or backlog
-opt_params: False # optimization of hyperparameters/constants (boolean)
+S: 1                    # number of stationary segments over T
+gamma_exponent: -0.5    # discretzation gamma = T^{gamma_exponent}
+model: backlog          # lost_sales or backlog
+opt_params: False       # optimization of hyperparameters/constants (boolean)
 opt_num_trials: 50
-opt_num_repetitions: 50
+opt_num_repetitions: 100
 
-# algorithm
+# execution configuration
 verbose: False
-num_cpu_cores: 7
-seed: 4
-num_repetitions: 50
+num_cpu_cores: 5
+seed: 2
+num_repetitions: 1000
 
 # parameters/constants
-const_change_NSIC: 0.000001
-const_eviction_NSIC: 0.01
+constChange: 0.00001
+constEviction: 0.00001
 delta_prob: 0.05
