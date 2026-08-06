@@ -1,6 +1,6 @@
 # Non-Stationary Inventory Control With Lead Times
 
-**Manuscript:** Non-Stationary Inventory Control With Lead Times
+**Manuscript:** [Non-Stationary Inventory Control With Lead Times](https://arxiv.org/abs/2602.05799)
 
 **Authors:** Nele H. Amiri, Sean R. Sinclair, Maximiliano Udenio
 
